@@ -1,0 +1,18 @@
+# Strict Showcase Zero-Leak Filter
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.bak
+.env*
+sync_auth.json
+wise_config.json
+vault_data*.json
+attachments/
+vault_files/
+snapshots/
+server.py
+wise_sync.py
+*.plist
+__pycache__/
+*.pyc
