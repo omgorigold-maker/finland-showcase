@@ -25328,17 +25328,17 @@ function initSortableWidgets() {
   const DEPOSIT_PROFORMA_DEFAULT_TERMS_CONTENT = [
     '• Deposit payment is due upon signing the project proposal / quote.',
     '• Project commencement begins upon receipt of deposit. Failure to pay the deposit in a timely manner may result in setbacks and postponing of deadlines.',
-    '• This proforma invoice covers the initial 50% project retainer / deposit. The remaining 50% will be invoiced upon project completion and final deliverables handover. All final high-resolution source and production files to be transferred to the Client upon completed settlement of final invoice.',
-    '• An official VAT tax invoice / receipt will be issued immediately upon payment confirmation.',
-    '• Communication and inquiries: Mon-Sat via Email: contact@studio-demo.com / WhatsApp: +49 30 1234567.'
+    '• This proforma invoice covers the initial 50% project scope. The remaining 50% will be invoiced upon project completion and final deliverables handover. All final high-resolution source and production files to be transferred to the Client upon completed settlement of final invoice.',
+    '• An official VAT tax invoice / receipt will be issued immediately upon payment confirmation.'
   ].join('\n');
   const DEPOSIT_PROFORMA_DEFAULT_BANK_CONTENT = 'Name: Studio Creative\nIBAN: DE89 3704 0044 0532 0130 00\nSwift/BIC: COBADEFFXXX\nBank address: European Commercial Bank, Frankfurt, Germany';
+  const DEPOSIT_PROFORMA_DEFAULT_COMMUNICATION_CONTENT = 'MON-SAT VIA EMAIL: STUDIO@CREATIVE.DEMO / WHATSAPP: +49 30 1234 5678';
   function getDepositProformaDefaultTerms() {
     if (isDemoMode()) {
       return [
         '• Deposit payment is due upon signing the project proposal / quote.',
         '• Project commencement begins upon receipt of deposit. Failure to pay the deposit in a timely manner may result in setbacks and postponing of deadlines.',
-        '• This proforma invoice covers the initial 50% project retainer / deposit. The remaining 50% will be invoiced upon project completion and final deliverables handover. All final high-resolution source and production files to be transferred to the Client upon completed settlement of final invoice.',
+        '• This proforma invoice covers the initial 50% project scope. The remaining 50% will be invoiced upon project completion and final deliverables handover. All final high-resolution source and production files to be transferred to the Client upon completed settlement of final invoice.',
         '• An official VAT tax invoice / receipt will be issued immediately upon payment confirmation.'
       ].join('\n');
     }
@@ -25349,6 +25349,12 @@ function initSortableWidgets() {
       return 'Name: Studio Creative\nIBAN: DE89 3704 0044 0532 0130 00\nSwift/BIC: COBADEFFXXX\nBank address: European Commercial Bank';
     }
     return DEPOSIT_PROFORMA_DEFAULT_BANK_CONTENT;
+  }
+  function getDepositProformaDefaultCommunication() {
+    if (isDemoMode()) {
+      return 'MON-SAT VIA EMAIL: STUDIO@CREATIVE.DEMO / WHATSAPP: +49 30 1234 5678';
+    }
+    return DEPOSIT_PROFORMA_DEFAULT_COMMUNICATION_CONTENT;
   }
   function getProformaDefaultTerms() {
     if (!isDemoMode() && state.appPrefs && typeof state.appPrefs.proformaDefaultTerms === 'string' && state.appPrefs.proformaDefaultTerms.trim()) {
@@ -25512,6 +25518,30 @@ function initSortableWidgets() {
         else out.push(bankBlock);
       }
 
+      // In deposit proforma, ensure COMMUNICATION AND INQUIRIES: section exists right after BANK DETAILS
+      const bankPos = out.findIndex(s => s && s.type === 'text' && (s.title || '').trim().toUpperCase() === 'BANK DETAILS');
+      let tplComm = out.find(s => s && s.type === 'text' && (s.title || '').trim().toUpperCase().startsWith('COMMUNICATION AND INQUIRIES'));
+      if (tplComm) {
+        tplComm.title = 'COMMUNICATION AND INQUIRIES:';
+        tplComm.content = DEPOSIT_PROFORMA_DEFAULT_COMMUNICATION_CONTENT;
+        const curIdx = out.indexOf(tplComm);
+        if (bankPos !== -1 && curIdx !== bankPos + 1) {
+          out.splice(curIdx, 1);
+          const newBankPos = out.findIndex(s => s && s.type === 'text' && (s.title || '').trim().toUpperCase() === 'BANK DETAILS');
+          out.splice(newBankPos + 1, 0, tplComm);
+        }
+      } else {
+        const commBlock = {
+          id: 'sec_comm_' + Date.now(),
+          type: 'text',
+          title: 'COMMUNICATION AND INQUIRIES:',
+          pageBreakBefore: false,
+          content: DEPOSIT_PROFORMA_DEFAULT_COMMUNICATION_CONTENT
+        };
+        if (bankPos !== -1) out.splice(bankPos + 1, 0, commBlock);
+        else out.push(commBlock);
+      }
+
       // Remove any separate conditions block in deposit proforma (notes are already inside payment terms)
       out = out.filter(s => !(s && s.type === 'conditions'));
     } else {
@@ -25562,7 +25592,7 @@ function initSortableWidgets() {
     const master = getMasterPoTemplate();
     const elemStyles = JSON.parse(JSON.stringify(master.elementStyles || {}));
     elemStyles.doc_subtitle = Object.assign({}, elemStyles.doc_subtitle || {}, {
-      color: '#db2777',
+      color: '#64748b',
       fontWeight: '700',
       letterSpacing: '0.05em'
     });
@@ -25585,7 +25615,8 @@ function initSortableWidgets() {
         { id: 'sec_scope_dep', type: 'scope', title: 'SUMMARY', pageBreakBefore: false, content: 'As agreed upon signing quote / proposal' },
         { id: 'sec_deliverables', type: 'deliverables', title: 'DELIVERABLES & DEPOSIT FEES', pageBreakBefore: false },
         { id: 'sec_terms_dep', type: 'terms', title: 'PAYMENT TERMS', pageBreakBefore: false, content: DEPOSIT_PROFORMA_DEFAULT_TERMS_CONTENT },
-        { id: 'sec_bank_dep', type: 'text', title: 'BANK DETAILS', pageBreakBefore: false, content: DEPOSIT_PROFORMA_DEFAULT_BANK_CONTENT }
+        { id: 'sec_bank_dep', type: 'text', title: 'BANK DETAILS', pageBreakBefore: false, content: DEPOSIT_PROFORMA_DEFAULT_BANK_CONTENT },
+        { id: 'sec_comm_dep', type: 'text', title: 'COMMUNICATION AND INQUIRIES:', pageBreakBefore: false, content: DEPOSIT_PROFORMA_DEFAULT_COMMUNICATION_CONTENT }
       ],
       richText: {}
     };
@@ -25595,7 +25626,7 @@ function initSortableWidgets() {
     const master = getMasterPoTemplate();
     const elemStyles = JSON.parse(JSON.stringify(master.elementStyles || {}));
     elemStyles.doc_subtitle = Object.assign({}, elemStyles.doc_subtitle || {}, {
-      color: '#db2777',
+      color: '#64748b',
       fontWeight: '700',
       letterSpacing: '0.05em'
     });
@@ -32361,7 +32392,7 @@ function initSortableWidgets() {
       let initTotal = depositRate;
       const initElementStyles = {
         doc_heading: { fontSize: 24, fontWeight: '800', letterSpacing: '-0.02em', color: '#0f172a' },
-        doc_subtitle: { fontSize: 11, fontWeight: '700', letterSpacing: '0.05em', color: '#db2777' }
+        doc_subtitle: { fontSize: 11, fontWeight: '700', letterSpacing: '0.05em', color: '#64748b' }
       };
       const initRichText = {};
 
@@ -32376,7 +32407,7 @@ function initSortableWidgets() {
             name: 'Ori Gold',
             title: 'Creative Studio · Art & Graphics',
             contact: 'Email: contact@studio-demo.com',
-            location: 'WhatsApp: +49 30 1234567'
+            location: 'WhatsApp: +49 30 1234 5678'
           };
 
       proj.depositProforma = {
@@ -32423,6 +32454,13 @@ function initSortableWidgets() {
             title: 'BANK DETAILS',
             pageBreakBefore: false,
             content: DEPOSIT_PROFORMA_DEFAULT_BANK_CONTENT
+          },
+          {
+            id: 'sec_comm_' + Date.now(),
+            type: 'text',
+            title: 'COMMUNICATION AND INQUIRIES:',
+            pageBreakBefore: false,
+            content: DEPOSIT_PROFORMA_DEFAULT_COMMUNICATION_CONTENT
           }
         ],
         subtotal: initSubtotal,
@@ -32447,9 +32485,14 @@ function initSortableWidgets() {
       poElementStyles[k] = Object.assign({}, baseElementStyles[k] || {}, projElementStyles[k] || {});
     });
     if (!poElementStyles.doc_subtitle) poElementStyles.doc_subtitle = {};
-    poElementStyles.doc_subtitle.color = '#db2777';
+    if (!poElementStyles.doc_subtitle.color || poElementStyles.doc_subtitle.color === '#db2777') {
+      poElementStyles.doc_subtitle.color = '#64748b';
+    }
     poElementStyles.doc_subtitle.fontWeight = '700';
     poElementStyles.doc_subtitle.letterSpacing = '0.05em';
+    if (po.elementStyles && po.elementStyles.doc_subtitle && po.elementStyles.doc_subtitle.color === '#db2777') {
+      po.elementStyles.doc_subtitle.color = '#64748b';
+    }
 
     poRichText = Object.assign(
       {},
@@ -32470,7 +32513,7 @@ function initSortableWidgets() {
         name: 'Ori Gold',
         title: 'Creative Studio · Art & Graphics',
         contact: 'Email: contact@studio-demo.com',
-        location: 'WhatsApp: +49 30 1234567'
+        location: 'WhatsApp: +49 30 1234 5678'
       };
     }
 
