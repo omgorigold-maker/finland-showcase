@@ -22267,9 +22267,11 @@ function initSortableWidgets() {
 
     // 1. Exact dedicated key lookup first
     let attachment = null;
+    let exactCandidate = null;
     if (attKey) {
       const exact = await getReceiptAttachment(attKey);
       if (exact && exact.data) {
+        exactCandidate = exact;
         if (!fallbackKey || attKey !== fallbackKey || matchesExpectedName(exact)) {
           attachment = exact;
         } else if (!expectedName) {
@@ -22278,14 +22280,15 @@ function initSortableWidgets() {
       }
     }
 
-    // 2. If exact key was overwritten or missing, search known non-colliding sibling keys for the exact filename
-    if ((!attachment || !attachment.data) && !isGenericExpected && entityId) {
+    // 2. If exact key was overwritten, missing, or didn't match filename, search known sibling keys
+    if ((!attachment || !attachment.data) && entityId) {
       const siblingKeys = [
-        `${entityId}_brief`,
         `${entityId}_quote`,
         `${entityId}_proforma`,
+        `${entityId}_deposit_proforma`,
         `${entityId}_invoice`,
-        `${entityId}_receipt`
+        `${entityId}_receipt`,
+        `${entityId}_brief`
       ];
       for (const sk of siblingKeys) {
         if (sk === attKey) continue;
@@ -22297,7 +22300,7 @@ function initSortableWidgets() {
       }
     }
 
-    // 3. Only use shared fallbackKey if it actually matches the expected filename (prevents showing a newer file on an older row)
+    // 3. Only use shared fallbackKey if it actually matches the expected filename
     if ((!attachment || !attachment.data) && fallbackKey && fallbackKey !== attKey) {
       const fb = await getReceiptAttachment(fallbackKey);
       if (matchesExpectedName(fb)) {
@@ -22311,6 +22314,11 @@ function initSortableWidgets() {
       if (matchesExpectedName(legacyProf)) {
         attachment = legacyProf;
       }
+    }
+
+    // 5. Direct fallback: If exactCandidate was retrieved for this exact key, display it rather than failing
+    if ((!attachment || !attachment.data) && exactCandidate && exactCandidate.data) {
+      attachment = exactCandidate;
     }
 
     if (!attachment || !attachment.data) {
@@ -25246,31 +25254,56 @@ function initSortableWidgets() {
     docTitle: 'Price Quote / Proposal',
     docSubtitle: '',
     sender: {
-      name: 'Studio',
-      title: 'Creative Direction & Design',
-      contact: '',
-      location: ''
+      name: 'Ori Gold',
+      title: 'Creative Studio · Art & Graphics',
+      contact: 'Email: contact@studio-demo.com',
+      location: 'WhatsApp: +49 30 1234 5678'
     },
     typography: {
       fontFamily: 'Inter, sans-serif',
       fontSize: 13,
-      lineHeight: 1.6,
+      lineHeight: 1.55,
       sectionGap: 22,
       titleGap: 8,
       titleSize: 12,
-      sheetPadding: '36px 40px',
+      sheetPadding: '48px 52px',
       showPageNumbers: true
     },
     elementStyles: {
       doc_heading: { fontWeight: '700', fontFamily: "'Space Grotesk', sans-serif" },
+      doc_subtitle: { color: '#64748b', fontWeight: '700', letterSpacing: '0.05em', fontSize: 14 },
       sender_name: { fontFamily: "'Montserrat', sans-serif", offsetY: 0.25 },
       sender_title: { fontFamily: "'Outfit', sans-serif", offsetY: -0.75, fontWeight: '700', color: '#0f172a' },
       sender_contact: { offsetY: -1.5, fontWeight: 'inherit', fontFamily: "'Plus Jakarta Sans', sans-serif", color: '#475569', fontSize: 10 },
       sender_location: { offsetY: -3.5, fontFamily: "'Plus Jakarta Sans', sans-serif", color: '#475569' },
+      client_name: { offsetY: -1 },
       client_email: { offsetY: -2 },
       client_address: { offsetY: -3 },
+      divider_overview: { offsetY: -1 },
+      sec_sec_div_overview: { offsetY: -4.5 },
       sec_sec_deliverables: { offsetY: 1 },
-      totals_sec_deliverables: { offsetY: -3 }
+      totals_sec_deliverables: { offsetY: -0.5, offsetX: -1 },
+      th_desc: { lineHeight: '1.7' },
+      th_amount: { lineHeight: '2', offsetX: 7.5 },
+      item_desc_0: { letterSpacing: '0.05em', fontWeight: '300', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' },
+      item_amount_0: { offsetX: 7 },
+      item_desc_1: { fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: '300' },
+      subtotal_val: { offsetX: -0.5 },
+      cur_input: { fontFamily: 'Outfit, sans-serif', fontWeight: '400' },
+      issue_date_val: { fontFamily: 'Outfit, sans-serif', fontWeight: '400' },
+      valid_until_val: { fontFamily: 'Outfit, sans-serif', fontWeight: '400' },
+      label_client: { offsetY: 0, color: '#475569' },
+      label_ref: { color: '#475569' },
+      label_issue_date: { color: '#475569' },
+      label_valid_until: { color: '#475569' },
+      label_cur: { color: '#475569' }
+    },
+    richText: {
+      label_client: '<span style="color: rgb(71, 85, 105);">Client / Recipient</span>',
+      label_ref: '<span style="color: rgb(71, 85, 105);">Reference</span>',
+      label_issue_date: '<span style="color: rgb(71, 85, 105);">Date Issued</span>',
+      label_valid_until: '<span style="color: rgb(71, 85, 105);">Valid Until</span>',
+      label_cur: '<span style="color: rgb(71, 85, 105);">Currency</span>'
     },
     labels: {
       client: 'Client / Recipient',
@@ -25279,14 +25312,14 @@ function initSortableWidgets() {
       issueDate: 'Date Issued',
       validUntil: 'Valid Until',
       project: 'Project / Assignment',
-      thDesc: 'Deliverable / Description',
-      thQty: 'Qty',
-      thRate: 'Rate',
-      thAmount: 'Amount',
+      thDesc: 'ITEM / DESCRIPTION',
+      thQty: 'QTY',
+      thRate: 'RATE',
+      thAmount: 'AMOUNT',
       subtotal: 'Subtotal',
-      discount: 'Discount',
+      discount: 'Bundle Discount',
       tax: 'VAT / Tax',
-      totalInvestment: 'Total Investment'
+      totalInvestment: 'TOTAL'
     }
   };
 
@@ -25566,6 +25599,53 @@ function initSortableWidgets() {
     return out;
   }
 
+  function getDefaultPoQuoteSections() {
+    return [
+      { id: 'sec_header', type: 'header', title: 'Document Header' },
+      { id: 'sec_overview', type: 'overview', title: 'Client & Project Details' },
+      { id: 'sec_div_overview', type: 'divider', title: 'Divider Line', content: '' },
+      { id: 'sec_scope_quote', type: 'scope', title: 'SUMMARY', pageBreakBefore: false, content: '' },
+      { id: 'sec_deliverables', type: 'deliverables', title: 'DELIVERABLES', pageBreakBefore: false },
+      {
+        id: 'sec_timeline_quote',
+        type: 'terms',
+        title: 'PROJECT TIMELINE & DELIVERY',
+        pageBreakBefore: false,
+        content: '<div>1. Concept & First Drafts: Delivered within ____________ business days from deposit payment.</div><div>2. Feedback & Revisions: Up to 2 revision rounds per deliverable.</div><div>3. Final Delivery: _________________</div>'
+      },
+      {
+        id: 'sec_terms_quote',
+        type: 'terms',
+        title: 'TERMS & CONDITIONS',
+        pageBreakBefore: false,
+        content: '<div>• 50% upfront deposit is required to lock project scheduling and commence active production work.</div><div>• Production and active deliverable design kick off immediately upon receipt of the deposit funds.</div><div>• This deposit proforma invoice serves as a preliminary payment request; an official VAT tax invoice / receipt will be issued upon receipt of payment.</div><div>• The remaining 50% project balance will be invoiced upon final review and final project files handoff.</div>'
+      },
+      {
+        id: 'sec_bank_quote',
+        type: 'text',
+        title: 'BANK TRANSFER DETAILS',
+        pageBreakBefore: false,
+        content: isDemoMode()
+          ? '<div>Name: Studio Creative</div><div>IBAN: DE89 3704 0044 0532 0130 00</div><div>Swift/BIC: COBADEFFXXX</div><div>Bank address: European Commercial Bank</div>'
+          : '<div>Name: Studio Creative</div><div>IBAN: DE89 3704 0044 0532 0130 00</div><div>Swift/BIC: COBADEFFXXX</div><div>Bank address: European Commercial Bank, Frankfurt, Germany</div>'
+      },
+      {
+        id: 'sec_acc_quote',
+        type: 'acceptance',
+        title: '',
+        pageBreakBefore: false,
+        clientTitle: 'Client Signature',
+        providerTitle: 'Service Provider Signature',
+        signSealText: 'Signature & Seal',
+        signDateText: 'Date: _________________',
+        signNameText: 'Name: _________________',
+        signSealProviderText: 'Signature & Seal',
+        signDateProviderText: 'Date: _________________',
+        signNameProviderText: 'Name: _________________'
+      }
+    ];
+  }
+
   function getMasterPoTemplate() {
     let localTpl = null;
     try {
@@ -25583,8 +25663,8 @@ function initSortableWidgets() {
       typography: Object.assign({}, DEFAULT_PO_TEMPLATE.typography, customTpl.typography || {}),
       elementStyles: Object.assign({}, JSON.parse(JSON.stringify(DEFAULT_PO_TEMPLATE.elementStyles)), JSON.parse(JSON.stringify(customTpl.elementStyles || {}))),
       labels: Object.assign({}, DEFAULT_PO_TEMPLATE.labels, customTpl.labels || {}),
-      sections: Array.isArray(customTpl.sections) ? JSON.parse(JSON.stringify(customTpl.sections)) : null,
-      richText: customTpl.richText ? JSON.parse(JSON.stringify(customTpl.richText)) : {}
+      sections: Array.isArray(customTpl.sections) && customTpl.sections.length > 0 ? JSON.parse(JSON.stringify(customTpl.sections)) : getDefaultPoQuoteSections(),
+      richText: Object.assign({}, DEFAULT_PO_TEMPLATE.richText || {}, customTpl.richText || {})
     };
   }
 
@@ -28976,71 +29056,17 @@ function initSortableWidgets() {
       const clonedSecs = JSON.parse(JSON.stringify(masterTpl.sections));
       const scopeSec = clonedSecs.find(s => s && (s.type === 'scope' || (s.type === 'custom' && (s.title || '').toLowerCase() === 'summary')));
       const leadNoteText = po?.scope !== undefined ? po.scope : (lead?.notes ? String(lead.notes).split('\n\n---\n\n')[0] : '');
-      if (scopeSec && (!scopeSec.content || !String(scopeSec.content).replace(/<[^>]*>/g, '').trim()) && leadNoteText) {
-        scopeSec.content = leadNoteText;
+      if (scopeSec) {
+        if (typeof scopeSec.content === 'string' && (scopeSec.content.includes('Project scope...') || scopeSec.content.includes('Project scope…'))) {
+          scopeSec.content = '';
+        } else if ((!scopeSec.content || !String(scopeSec.content).replace(/<[^>]*>/g, '').trim()) && leadNoteText && !leadNoteText.includes('Project scope...')) {
+          scopeSec.content = leadNoteText;
+        }
       }
       return clonedSecs;
     }
 
-    return [
-      {
-        id: 'sec_header',
-        type: 'header',
-        title: 'Document Header'
-      },
-      {
-        id: 'sec_overview',
-        type: 'overview',
-        title: 'Client & Project Details'
-      },
-      {
-        id: 'sec_div_overview',
-        type: 'divider',
-        title: 'Divider Line',
-        content: ''
-      },
-      {
-        id: 'sec_custom_summary',
-        type: 'custom',
-        title: 'summary',
-        pageBreakBefore: false,
-        content: po?.scope !== undefined ? po.scope : (lead?.notes ? String(lead.notes).split('\n\n---\n\n')[0] : '')
-      },
-      {
-        id: 'sec_deliverables',
-        type: 'deliverables',
-        title: 'Deliverables & Investment',
-        pageBreakBefore: false
-      },
-      {
-        id: 'sec_timeline',
-        type: 'timeline',
-        title: 'Project Timeline & Delivery',
-        pageBreakBefore: false,
-        content: po?.timeline || ''
-      },
-      {
-        id: 'sec_conditions',
-        type: 'conditions',
-        title: 'Terms & Conditions',
-        pageBreakBefore: false,
-        content: po?.conditions || ''
-      },
-      {
-        id: 'sec_acceptance',
-        type: 'acceptance',
-        title: '',
-        clientTitle: 'Authorized Client Signature',
-        providerTitle: 'Service Provider Signature',
-        pageBreakBefore: false,
-        signSealText: 'Signature & Seal',
-        signDateText: 'Date: _________________',
-        signNameText: 'Name: _________________',
-        signSealProviderText: 'Signature & Seal',
-        signDateProviderText: 'Date: _________________',
-        signNameProviderText: 'Name: _________________'
-      }
-    ];
+    return getDefaultPoQuoteSections();
   }
 
   // ==========================================
@@ -32903,11 +32929,58 @@ function initSortableWidgets() {
           textAlign: 'left'
         }, elStyles['content_' + sec.id] || {});
         const secTitleInner = rich['title_' + sec.id] || escapeHtml(sec.title || '');
-        const rawContent = rich['content_' + sec.id] || sec.content || '';
-        const bodyHtml = (typeof formatInitialContent === 'function') ? formatInitialContent(rawContent) : (rawContent ? escapeHtml(rawContent).replace(/\n/g, '<br>') : '');
-        const titleHtml = (sec.title || rich['title_' + sec.id])
+        const hasTitle = (sec.title && sec.title.trim().length > 0) || (rich['title_' + sec.id] && rich['title_' + sec.id].trim().length > 0);
+        const titleHtml = hasTitle
           ? `<div style="font-size:${titleSt.fontSize}px; font-weight:${titleSt.fontWeight}; letter-spacing:${titleSt.letterSpacing}; color:${titleSt.color}; text-transform:uppercase; margin-bottom:${titleGap}px; text-align:${titleSt.textAlign};">${secTitleInner}</div>`
           : '';
+
+        if (sec.type === 'acceptance') {
+          const clientTitleInner = rich['po-client-sign-title_' + sec.id] || escapeHtml(sec.clientTitle || 'Authorized Client Signature');
+          const providerTitleInner = rich['po-provider-sign-title_' + sec.id] || escapeHtml(sec.providerTitle || 'Service Provider Signature');
+          const clientTitleSt = elStyles['po-client-sign-title_' + sec.id] || {};
+          const providerTitleSt = elStyles['po-provider-sign-title_' + sec.id] || {};
+          const signNameSt = elStyles['po-sign-name-label_' + sec.id] || {};
+          const signNameProviderSt = elStyles['po-sign-name-provider-label_' + sec.id] || {};
+
+          const signSealText = sec.signSealText || 'Signature & Seal';
+          const signDateText = sec.signDateText || 'Date: _________________';
+          const signNameText = rich['po-sign-name-label_' + sec.id] || escapeHtml(sec.signNameText || 'Name: _________________');
+
+          const signSealProviderText = sec.signSealProviderText || 'Signature & Seal';
+          const signDateProviderText = sec.signDateProviderText || 'Date: _________________';
+          const signNameProviderText = rich['po-sign-name-provider-label_' + sec.id] || escapeHtml(sec.signNameProviderText || 'Name: _________________');
+
+          return `
+            <div class="po-section" style="margin-bottom:${sectionGap}px;">
+              ${titleHtml}
+              <div class="po-signatures-grid grid grid-cols-1 sm:grid-cols-2 gap-8 pt-4">
+                <div class="space-y-3">
+                  <div class="font-bold text-xs uppercase tracking-wider text-slate-800" style="${clientTitleSt.color ? 'color:' + clientTitleSt.color + ';' : ''}">${clientTitleInner}</div>
+                  <div class="h-16 border-b border-slate-300 flex items-end pb-1 text-[11px] text-slate-400">
+                    ${escapeHtml(signSealText)}
+                  </div>
+                  <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 gap-2">
+                    <span class="w-1/2">${escapeHtml(signDateText)}</span>
+                    <span class="w-1/2 text-right" style="${signNameSt.fontSize ? 'font-size:' + signNameSt.fontSize + 'px;' : ''}${signNameSt.fontWeight ? 'font-weight:' + signNameSt.fontWeight + ';' : ''}">${signNameText}</span>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                  <div class="font-bold text-xs uppercase tracking-wider text-slate-800" style="${providerTitleSt.color ? 'color:' + providerTitleSt.color + ';' : ''}">${providerTitleInner}</div>
+                  <div class="h-16 border-b border-slate-300 flex items-end pb-1 text-[11px] text-slate-400">
+                    ${escapeHtml(signSealProviderText)}
+                  </div>
+                  <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 gap-2">
+                    <span class="w-1/2">${escapeHtml(signDateProviderText)}</span>
+                    <span class="w-1/2 text-right" style="${signNameProviderSt.fontSize ? 'font-size:' + signNameProviderSt.fontSize + 'px;' : ''}${signNameProviderSt.fontWeight ? 'font-weight:' + signNameProviderSt.fontWeight + ';' : ''}">${signNameProviderText}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        const rawContent = rich['content_' + sec.id] || sec.content || '';
+        const bodyHtml = (typeof formatInitialContent === 'function') ? formatInitialContent(rawContent) : (rawContent ? escapeHtml(rawContent).replace(/\n/g, '<br>') : '');
         return `
           <div class="po-section" style="margin-bottom:${sectionGap}px;">
             ${titleHtml}
