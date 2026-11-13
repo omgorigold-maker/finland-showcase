@@ -25433,6 +25433,13 @@ function initSortableWidgets() {
     }
     if (Array.isArray(tpl.sections)) {
       tpl.sections = tpl.sections.filter(s => !(s && s.type === 'text' && s.title === '*' && (!s.content || !String(s.content).replace(/<[^>]*>/g, '').trim())));
+      tpl.sections.forEach(s => {
+        if (s && s.type === 'scope' && typeof s.content === 'string') {
+          if (s.content.includes('Project scope...') || s.content.includes('Project scope…')) {
+            s.content = '';
+          }
+        }
+      });
       const ovIdx = tpl.sections.findIndex(s => s && s.type === 'overview');
       if (ovIdx !== -1 && (!tpl.sections[ovIdx + 1] || tpl.sections[ovIdx + 1].type !== 'divider')) {
         tpl.sections.splice(ovIdx + 1, 0, { id: 'sec_div_overview', type: 'divider', title: 'Divider Line', content: '' });
@@ -27054,10 +27061,18 @@ function initSortableWidgets() {
 
   function pushPoUndoSnapshot() {
     if (poIsApplyingUndoRedo) return;
+    if (poInputSnapshotTimer) {
+      clearTimeout(poInputSnapshotTimer);
+      poInputSnapshotTimer = null;
+    }
+    flushLivePoDomToState();
     const snap = getPoDocumentSnapshot();
     if (poUndoStack.length > 0) {
       const last = poUndoStack[poUndoStack.length - 1];
-      if (JSON.stringify(last) === JSON.stringify(snap)) return;
+      if (JSON.stringify(last) === JSON.stringify(snap)) {
+        updatePoUndoRedoUI();
+        return;
+      }
     }
     poUndoStack.push(snap);
     if (poUndoStack.length > PO_MAX_HISTORY) {
@@ -27070,8 +27085,14 @@ function initSortableWidgets() {
   function updatePoUndoRedoUI() {
     const undoBtn = document.getElementById('poUndoBtn');
     const redoBtn = document.getElementById('poRedoBtn');
+    let canUndo = poUndoStack.length > 1;
+    if (!canUndo && poUndoStack.length === 1) {
+      const liveSnap = getPoDocumentSnapshot();
+      if (poUndoStack[0] && JSON.stringify(poUndoStack[0]) !== JSON.stringify(liveSnap)) {
+        canUndo = true;
+      }
+    }
     if (undoBtn) {
-      const canUndo = poUndoStack.length > 1;
       undoBtn.disabled = !canUndo;
       undoBtn.classList.toggle('opacity-40', !canUndo);
       undoBtn.classList.toggle('pointer-events-none', !canUndo);
@@ -27087,9 +27108,14 @@ function initSortableWidgets() {
   function schedulePoInputSnapshot() {
     if (poIsApplyingUndoRedo) return;
     if (poInputSnapshotTimer) clearTimeout(poInputSnapshotTimer);
+    const undoBtn = document.getElementById('poUndoBtn');
+    if (undoBtn) {
+      undoBtn.disabled = false;
+      undoBtn.classList.remove('opacity-40', 'pointer-events-none');
+    }
     poInputSnapshotTimer = setTimeout(() => {
       pushPoUndoSnapshot();
-    }, 600);
+    }, 400);
   }
 
   function applyPoDocumentSnapshot(snap) {
@@ -27170,6 +27196,10 @@ function initSortableWidgets() {
       clearTimeout(poInputSnapshotTimer);
       poInputSnapshotTimer = null;
     }
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
+    flushLivePoDomToState();
     const current = getPoDocumentSnapshot();
     const top = poUndoStack[poUndoStack.length - 1];
     if (top && JSON.stringify(top) !== JSON.stringify(current)) {
@@ -27177,6 +27207,7 @@ function initSortableWidgets() {
     }
     if (poUndoStack.length <= 1) {
       showToast('Nothing to Undo', 'At oldest document state.', 'info');
+      updatePoUndoRedoUI();
       return;
     }
     const currentState = poUndoStack.pop();
@@ -27188,7 +27219,14 @@ function initSortableWidgets() {
   }
 
   function triggerPoRedo() {
-    if (poRedoStack.length === 0) return;
+    if (poRedoStack.length === 0) {
+      showToast('Nothing to Redo', 'At newest document state.', 'info');
+      updatePoUndoRedoUI();
+      return;
+    }
+    if (document.activeElement && typeof document.activeElement.blur === 'function') {
+      document.activeElement.blur();
+    }
     const target = poRedoStack.pop();
     poUndoStack.push(target);
     applyPoDocumentSnapshot(target);
@@ -27325,7 +27363,6 @@ function initSortableWidgets() {
 
   function nudgeSelectedPoElement(deltaMm, axis = 'y') {
     if (!poSelectedElementId) return;
-    pushPoUndoSnapshot();
     if (poSelectedElementId.indexOf('sig_') === 0) {
       const sig = (currentPoSignatures || []).find(s => s && s.id === poSelectedElementId);
       if (sig) {
@@ -27338,6 +27375,7 @@ function initSortableWidgets() {
         }
         updatePoRightSidebarInspector();
         triggerPriceOfferingAutoSave(false);
+        pushPoUndoSnapshot();
         return;
       }
     }
@@ -27357,11 +27395,11 @@ function initSortableWidgets() {
 
     updatePoRightSidebarInspector();
     triggerPriceOfferingAutoSave(false);
+    pushPoUndoSnapshot();
   }
 
   function resetSelectedElementNudge() {
     if (!poSelectedElementId) return;
-    pushPoUndoSnapshot();
     if (poSelectedElementId.indexOf('sig_') === 0) {
       const sig = (currentPoSignatures || []).find(s => s && s.id === poSelectedElementId);
       if (sig) {
@@ -27371,6 +27409,7 @@ function initSortableWidgets() {
         renderPoSignaturesLayer();
         updatePoRightSidebarInspector();
         triggerPriceOfferingAutoSave(false);
+        pushPoUndoSnapshot();
         return;
       }
     }
@@ -27384,6 +27423,7 @@ function initSortableWidgets() {
     }
     updatePoRightSidebarInspector();
     triggerPriceOfferingAutoSave(false);
+    pushPoUndoSnapshot();
   }
 
   function resetSelectedElementStyle() {
@@ -27400,11 +27440,11 @@ function initSortableWidgets() {
         clearPoActiveWordMarks();
         syncPoSectionContentFromHost(host);
         updatePoRightSidebarInspector();
+        pushPoUndoSnapshot();
       }
       return;
     }
     if (!poSelectedElementId) return;
-    pushPoUndoSnapshot();
     const prevSt = poElementStyles[poSelectedElementId] || {};
     const curEl = document.querySelector(`#priceOfferingPrintArea [data-elem-id="${poSelectedElementId}"]`);
     if (curEl) {
@@ -27422,6 +27462,7 @@ function initSortableWidgets() {
     const lead = getPoEditorTarget(leadId);
     renderPriceOfferingDocument(lead, lead?.priceOffering);
     triggerPriceOfferingAutoSave(true);
+    pushPoUndoSnapshot();
     showToast('Style Reset', 'Element restored to document default styling.', 'info');
   }
 
@@ -27791,6 +27832,7 @@ function initSortableWidgets() {
 
     if (prop === 'fontSize' || prop === 'fontFamily' || prop === 'lineHeight') poFitFieldMetrics();
 
+    schedulePoInputSnapshot();
     triggerPriceOfferingAutoSave(false);
     updatePoRightSidebarInspector();
     updatePoVisualPageBreakGuides();
@@ -28387,7 +28429,6 @@ function initSortableWidgets() {
     if (poSelectedElementId && poSelectedElementId.indexOf('sig_') === 0) {
       const origSig = (currentPoSignatures || []).find(s => s && s.id === poSelectedElementId);
       if (origSig) {
-        pushPoUndoSnapshot();
         const newSig = JSON.parse(JSON.stringify(origSig));
         newSig.id = 'sig_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
         newSig.xMm = parseFloat(((parseFloat(origSig.xMm) || 120) + 4).toFixed(1));
@@ -28397,6 +28438,7 @@ function initSortableWidgets() {
         const sigEl = document.querySelector(`#priceOfferingPrintArea [data-elem-id="${newSig.id}"]`);
         selectPoElement(sigEl, newSig.id, newSig.kind === 'image' ? 'PNG Signature' : 'Vector Signature', 'signature');
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         showToast('Signature Duplicated ✨', 'Drag the copy to position it.', 'success');
         return;
       }
@@ -28407,7 +28449,6 @@ function initSortableWidgets() {
       const itemIdx = parseInt(itemMatch[2], 10);
       if (!isNaN(itemIdx) && currentPoItems[itemIdx]) {
         flushLivePoDomToState();
-        pushPoUndoSnapshot();
         const insertIdx = itemIdx + 1;
         const cloneItem = JSON.parse(JSON.stringify(currentPoItems[itemIdx]));
         cloneItem.id = 'po_item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
@@ -28440,6 +28481,7 @@ function initSortableWidgets() {
           selectPoElement(newEl, newElemId, newEl.getAttribute('data-elem-name') || `Deliverable Row #${insertIdx + 1}`, 'text');
         }
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         showToast('Row Duplicated ✨', `Duplicated deliverable row #${itemIdx + 1}.`, 'success');
         return;
       }
@@ -28455,7 +28497,6 @@ function initSortableWidgets() {
     }
 
     flushLivePoDomToState();
-    pushPoUndoSnapshot();
     const newId = orig.type + '_copy_' + Date.now();
     const clone = JSON.parse(JSON.stringify(orig));
     const oldId = orig.id;
@@ -28487,6 +28528,7 @@ function initSortableWidgets() {
     renderPriceOfferingDocument(lead, lead?.priceOffering);
     selectPoSection(insertAt);
     savePriceOfferingDoc(false);
+    pushPoUndoSnapshot();
     showToast('Duplicated ✨', `Duplicated "${orig.title || 'block'}".`, 'success');
   }
 
@@ -28518,7 +28560,6 @@ function initSortableWidgets() {
     }
 
     flushLivePoDomToState();
-    pushPoUndoSnapshot();
 
     const prevSelectedElemId = poSelectedElementId;
     const prevSelectedMeta = poSelectedElementMeta ? Object.assign({}, poSelectedElementMeta) : null;
@@ -28563,6 +28604,7 @@ function initSortableWidgets() {
     }
 
     savePriceOfferingDoc(false);
+    pushPoUndoSnapshot();
   }
 
   async function deletePoSectionAt(idx) {
@@ -28597,7 +28639,6 @@ function initSortableWidgets() {
     }
 
     flushLivePoDomToState();
-    pushPoUndoSnapshot();
 
     currentPoSections.splice(idx, 1);
     poSelectedElementId = null;
@@ -28615,6 +28656,7 @@ function initSortableWidgets() {
     renderPriceOfferingDocument(lead, lead?.priceOffering);
     updatePoRightSidebarInspector();
     savePriceOfferingDoc(false);
+    pushPoUndoSnapshot();
     showToast('Removed', `"${secName}" removed. (Cmd/Ctrl+Z to Undo)`, 'info');
   }
 
@@ -28667,11 +28709,11 @@ function initSortableWidgets() {
     if (poSelectedElementId.indexOf('sig_') === 0) {
       const sigIdx = (currentPoSignatures || []).findIndex(s => s && s.id === poSelectedElementId);
       if (sigIdx !== -1) {
-        pushPoUndoSnapshot();
         currentPoSignatures.splice(sigIdx, 1);
         selectPoElement(null, null);
         renderPoSignaturesLayer();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         showToast('Signature Removed', 'Signature removed from document. (Cmd/Ctrl+Z to Undo)', 'info');
       }
       return;
@@ -28684,7 +28726,6 @@ function initSortableWidgets() {
     if (itemMatch) {
       const itemIdx = parseInt(itemMatch[2], 10);
       if (!isNaN(itemIdx) && currentPoItems[itemIdx]) {
-        pushPoUndoSnapshot();
         flushLivePoDomToState();
         currentPoItems.splice(itemIdx, 1);
         poShiftItemStyleKeysOnDelete(itemIdx, currentPoItems.length);
@@ -28694,6 +28735,7 @@ function initSortableWidgets() {
         recalculatePriceOfferingTotals();
         updatePoRightSidebarInspector();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         showToast('Removed', `Deliverable row #${itemIdx + 1} removed. (Cmd/Ctrl+Z to Undo)`, 'info');
       }
       return;
@@ -28701,7 +28743,6 @@ function initSortableWidgets() {
 
     const el = document.querySelector(`#priceOfferingPrintArea [data-elem-id="${poSelectedElementId}"]`);
     const elemName = poSelectedElementMeta?.name || el?.getAttribute('data-elem-name') || 'Element';
-    pushPoUndoSnapshot();
 
     if (!poElementStyles[poSelectedElementId]) poElementStyles[poSelectedElementId] = {};
     poElementStyles[poSelectedElementId].deleted = true;
@@ -28728,6 +28769,7 @@ function initSortableWidgets() {
     selectPoElement(null, null);
     updatePoVisualPageBreakGuides();
     triggerPriceOfferingAutoSave(true);
+    pushPoUndoSnapshot();
     showToast('Removed', `"${elemName}" removed. (Cmd/Ctrl+Z to Undo)`, 'info');
   }
 
@@ -28742,7 +28784,6 @@ function initSortableWidgets() {
       const idx = parseInt(itemMatch[2], 10);
       const newIdx = idx + dir;
       if (newIdx < 0 || newIdx >= currentPoItems.length) return;
-      pushPoUndoSnapshot();
       flushLivePoDomToState();
       const tmp = currentPoItems[idx];
       currentPoItems[idx] = currentPoItems[newIdx];
@@ -28756,6 +28797,7 @@ function initSortableWidgets() {
         selectPoElement(newEl, newId, newEl.getAttribute('data-elem-name') || 'Item', 'text');
       }
       triggerPriceOfferingAutoSave(true);
+      pushPoUndoSnapshot();
       return;
     }
 
@@ -28769,7 +28811,6 @@ function initSortableWidgets() {
       const curIdx = visibleSiblings.indexOf(unit);
       const targetIdx = curIdx + dir;
       if (curIdx !== -1 && targetIdx >= 0 && targetIdx < visibleSiblings.length) {
-        pushPoUndoSnapshot();
         const targetSibling = visibleSiblings[targetIdx];
         if (dir < 0) {
           container.insertBefore(unit, targetSibling);
@@ -28786,6 +28827,7 @@ function initSortableWidgets() {
         updatePoRightSidebarInspector();
         updatePoVisualPageBreakGuides();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
     }
@@ -29885,6 +29927,10 @@ function initSortableWidgets() {
 
   function formatInitialContent(content) {
     if (!content) return '';
+    const plain = content.replace(/<[^>]*>/g, '').trim();
+    if (plain === 'Project scope...' || plain === 'Project scope…' || plain === 'Project scope' || plain === '[PROJECT SCOPE & OBJECTIVE]') {
+      return '';
+    }
     if (content.includes('<') && (content.includes('</') || content.includes('<br'))) return content;
     return content.split('\n').map(line => {
       const trimmed = line.trim();
@@ -29913,14 +29959,14 @@ function initSortableWidgets() {
     return `
       <div class="po-header-grid flex flex-col sm:flex-row sm:items-start justify-between gap-6" data-po-container="header_grid">
         <div class="space-y-1 flex-1 min-w-0" data-po-unit-id="header_col_left" data-po-container="header_left">
-          <input type="text" id="poDocHeading" class="po-selectable po-doc-title-input text-2xl sm:text-3xl font-black text-slate-900 tracking-tight bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="doc_heading" data-elem-name="Document Title" data-elem-type="text" value="${escapeHtml(docTitle)}" placeholder="PRICE QUOTE / PROPOSAL">
+          <input type="text" id="poDocHeading" class="po-selectable po-doc-title-input text-2xl sm:text-3xl font-black text-slate-900 tracking-tight bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="doc_heading" data-elem-name="Document Title" data-elem-type="text" value="${escapeHtml(docTitle)}" placeholder="PRICE QUOTE / PROPOSAL...">
           <input type="text" id="poDocSubtitle" class="po-selectable text-xs font-semibold uppercase tracking-wider text-slate-400 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="doc_subtitle" data-elem-name="Document Subtitle" data-elem-type="text" value="${escapeHtml(docSubtitle)}" placeholder="Add subtitle or project reference...">
         </div>
         <div class="text-left sm:text-right space-y-0.5 shrink-0 text-xs" data-po-unit-id="header_col_right" data-po-container="header_right">
-          <input type="text" id="poSenderName" class="po-selectable font-bold text-slate-900 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto transition-colors" data-elem-id="sender_name" data-elem-name="Sender Name" data-elem-type="text" value="${escapeHtml(sender.name || '')}" placeholder="Your Name / Studio">
-          <input type="text" id="poSenderTitle" class="po-selectable text-slate-500 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto text-[11px] transition-colors" data-elem-id="sender_title" data-elem-name="Sender Title" data-elem-type="text" value="${escapeHtml(sender.title || '')}" placeholder="Role / Discipline">
-          <input type="text" id="poSenderContact" class="po-selectable text-slate-500 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto text-[11px] transition-colors" data-elem-id="sender_contact" data-elem-name="Sender Contact" data-elem-type="text" value="${escapeHtml(sender.contact || '')}" placeholder="email@domain.com • +1 234 567">
-          <input type="text" id="poSenderLocation" class="po-selectable text-slate-400 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto text-[10px] transition-colors" data-elem-id="sender_location" data-elem-name="Sender Location" data-elem-type="text" value="${escapeHtml(sender.location || '')}" placeholder="City, Country">
+          <input type="text" id="poSenderName" class="po-selectable font-bold text-slate-900 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto transition-colors" data-elem-id="sender_name" data-elem-name="Sender Name" data-elem-type="text" value="${escapeHtml(sender.name || '')}" placeholder="Your Name / Studio...">
+          <input type="text" id="poSenderTitle" class="po-selectable text-slate-500 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto text-[11px] transition-colors" data-elem-id="sender_title" data-elem-name="Sender Title" data-elem-type="text" value="${escapeHtml(sender.title || '')}" placeholder="Role / Discipline...">
+          <input type="text" id="poSenderContact" class="po-selectable text-slate-500 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto text-[11px] transition-colors" data-elem-id="sender_contact" data-elem-name="Sender Contact" data-elem-type="text" value="${escapeHtml(sender.contact || '')}" placeholder="email@domain.com • +1 234 567...">
+          <input type="text" id="poSenderLocation" class="po-selectable text-slate-400 sm:text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-full sm:w-60 block sm:ml-auto text-[10px] transition-colors" data-elem-id="sender_location" data-elem-name="Sender Location" data-elem-type="text" value="${escapeHtml(sender.location || '')}" placeholder="City, Country...">
         </div>
       </div>
     `;
@@ -29932,27 +29978,27 @@ function initSortableWidgets() {
     return `
       <div class="po-overview-grid grid grid-cols-1 sm:grid-cols-2 gap-8 text-xs" data-po-container="overview_grid">
         <div class="space-y-1 min-w-0" data-po-unit-id="overview_col_left" data-po-container="overview_left">
-          ${labelInput('label_client', 'Client Label', labels.client, 'CLIENT / RECIPIENT')}
-          <input type="text" id="poClientName" class="po-selectable font-bold text-slate-900 text-base bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="client_name" data-elem-name="Client Name" data-elem-type="text" value="${escapeHtml(client)}" placeholder="Client Name / Organization">
-          <input type="text" id="poClientEmail" class="po-selectable text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-xs transition-colors" data-elem-id="client_email" data-elem-name="Client Email" data-elem-type="text" value="${escapeHtml(clientEmail)}" placeholder="client@company.com">
-          <input type="text" id="poClientAddress" class="po-selectable text-slate-500 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-[11px] transition-colors" data-elem-id="client_address" data-elem-name="Client Address" data-elem-type="text" value="${escapeHtml(clientAddress)}" placeholder="Billing Address / City / Tax ID">
+          ${labelInput('label_client', 'Client Label', labels.client, 'CLIENT / RECIPIENT...')}
+          <input type="text" id="poClientName" class="po-selectable font-bold text-slate-900 text-base bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="client_name" data-elem-name="Client Name" data-elem-type="text" value="${escapeHtml(client)}" placeholder="Client Name / Organization...">
+          <input type="text" id="poClientEmail" class="po-selectable text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-xs transition-colors" data-elem-id="client_email" data-elem-name="Client Email" data-elem-type="text" value="${escapeHtml(clientEmail)}" placeholder="client@company.com...">
+          <input type="text" id="poClientAddress" class="po-selectable text-slate-500 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-[11px] transition-colors" data-elem-id="client_address" data-elem-name="Client Address" data-elem-type="text" value="${escapeHtml(clientAddress)}" placeholder="Billing Address / City / Tax ID...">
         </div>
         <div class="grid grid-cols-2 gap-3 text-[11px] content-start" data-po-unit-id="overview_col_right" data-po-container="overview_right">
           <div class="po-meta-cell" data-po-unit-id="cell_ref" data-po-container="cell_ref">
-            ${labelInput('label_ref', 'Reference Label', labels.reference, 'REFERENCE')}
-            <input type="text" id="poRefNo" class="po-selectable font-mono font-semibold text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="ref_no" data-elem-name="Reference Number" data-elem-type="text" value="${escapeHtml(refNo)}">
+            ${labelInput('label_ref', 'Reference Label', labels.reference, 'REFERENCE...')}
+            <input type="text" id="poRefNo" class="po-selectable font-mono font-semibold text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-elem-id="ref_no" data-elem-name="Reference Number" data-elem-type="text" value="${escapeHtml(refNo)}" placeholder="Reference #...">
           </div>
           <div class="po-meta-cell" data-po-unit-id="cell_cur" data-po-container="cell_cur">
-            ${labelInput('label_cur', 'Currency Label', labels.currency, 'CURRENCY')}
-            <input type="text" id="poCurrencyInput" class="po-selectable font-bold text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 text-xs w-full uppercase transition-colors" data-elem-id="cur_input" data-elem-name="Currency Code" data-elem-type="text" value="${escapeHtml(cur)}" placeholder="EUR">
+            ${labelInput('label_cur', 'Currency Label', labels.currency, 'CURRENCY...')}
+            <input type="text" id="poCurrencyInput" class="po-selectable font-bold text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 text-xs w-full uppercase transition-colors" data-elem-id="cur_input" data-elem-name="Currency Code" data-elem-type="text" value="${escapeHtml(cur)}" placeholder="EUR...">
           </div>
           <div class="po-meta-cell" data-po-unit-id="cell_issue_date" data-po-container="cell_issue_date">
-            ${labelInput('label_issue_date', 'Date Issued Label', labels.issueDate, 'DATE ISSUED')}
-            <input type="text" id="poIssueDate" class="po-selectable text-slate-700 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-xs font-medium transition-colors" data-elem-id="issue_date_val" data-elem-name="Date Issued" data-elem-type="text" value="${escapeHtml(issueDate)}" placeholder="Date Issued">
+            ${labelInput('label_issue_date', 'Date Issued Label', labels.issueDate, 'DATE ISSUED...')}
+            <input type="text" id="poIssueDate" class="po-selectable text-slate-700 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-xs font-medium transition-colors" data-elem-id="issue_date_val" data-elem-name="Date Issued" data-elem-type="text" value="${escapeHtml(issueDate)}" placeholder="Date Issued...">
           </div>
           <div class="po-meta-cell" data-po-unit-id="cell_valid_until" data-po-container="cell_valid_until">
-            ${labelInput('label_valid_until', 'Valid Until Label', labels.validUntil, 'VALID UNTIL')}
-            <input type="text" id="poValidUntil" class="po-selectable text-slate-700 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-xs font-medium transition-colors" data-elem-id="valid_until_val" data-elem-name="Valid Until Date" data-elem-type="text" value="${escapeHtml(validUntil)}" placeholder="Valid Until Date">
+            ${labelInput('label_valid_until', 'Valid Until Label', labels.validUntil, 'VALID UNTIL...')}
+            <input type="text" id="poValidUntil" class="po-selectable text-slate-700 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full text-xs font-medium transition-colors" data-elem-id="valid_until_val" data-elem-name="Valid Until Date" data-elem-type="text" value="${escapeHtml(validUntil)}" placeholder="Valid Until Date...">
           </div>
         </div>
       </div>
@@ -29995,16 +30041,16 @@ function initSortableWidgets() {
             <thead>
               <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <th class="po-col-desc py-2.5 px-3">
-                  <input type="text" class="po-selectable po-th-label w-full text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_desc" data-elem-name="Header: Description" data-elem-type="text" value="${escapeHtml(labels.thDesc || 'Deliverable / Description')}" placeholder="DELIVERABLE / DESCRIPTION">
+                  <input type="text" class="po-selectable po-th-label w-full text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_desc" data-elem-name="Header: Description" data-elem-type="text" value="${escapeHtml(labels.thDesc || 'ITEM / DESCRIPTION')}" placeholder="ITEM / DESCRIPTION...">
                 </th>
                 <th class="po-col-qty py-2.5 px-3 text-center w-20">
-                  <input type="text" class="po-selectable po-th-label w-full text-center text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_qty" data-elem-name="Header: Qty" data-elem-type="text" value="${escapeHtml(labels.thQty || 'Qty')}" placeholder="QTY">
+                  <input type="text" class="po-selectable po-th-label w-full text-center text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_qty" data-elem-name="Header: Qty" data-elem-type="text" value="${escapeHtml(labels.thQty || 'QTY')}" placeholder="QTY...">
                 </th>
                 <th class="po-col-rate py-2.5 px-3 text-right w-28">
-                  <input type="text" class="po-selectable po-th-label w-full text-right text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_rate" data-elem-name="Header: Rate" data-elem-type="text" value="${escapeHtml(labels.thRate || 'Rate')}" placeholder="RATE">
+                  <input type="text" class="po-selectable po-th-label w-full text-right text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_rate" data-elem-name="Header: Rate" data-elem-type="text" value="${escapeHtml(labels.thRate || 'RATE')}" placeholder="RATE...">
                 </th>
                 <th class="po-col-amount py-2.5 px-3 text-right w-28">
-                  <input type="text" class="po-selectable po-th-label w-full text-right text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_amount" data-elem-name="Header: Amount" data-elem-type="text" value="${escapeHtml(labels.thAmount || 'Amount')}" placeholder="AMOUNT">
+                  <input type="text" class="po-selectable po-th-label w-full text-right text-[11px] font-bold uppercase tracking-wider text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 transition-colors" data-elem-id="th_amount" data-elem-name="Header: Amount" data-elem-type="text" value="${escapeHtml(labels.thAmount || 'AMOUNT')}" placeholder="AMOUNT...">
                 </th>
                 <th class="py-2.5 px-2 w-10 text-center po-edit-cell"></th>
               </tr>
@@ -30032,14 +30078,14 @@ function initSortableWidgets() {
         <div class="po-selectable flex justify-end pt-4" data-elem-id="totals_${sid}" data-elem-name="Financial Totals" data-elem-type="table">
           <div class="w-full max-w-xs space-y-1.5 text-xs" data-po-container="totals_rows">
             <div class="po-total-row flex items-center justify-between py-1 text-slate-600" data-po-unit-id="row_subtotal">
-              <input type="text" class="po-selectable po-total-label font-medium text-xs text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 w-28 transition-colors" data-elem-id="label_subtotal" data-elem-name="Subtotal Label" data-elem-type="text" value="${escapeHtml(labels.subtotal || 'Subtotal')}" placeholder="Subtotal">
+              <input type="text" class="po-selectable po-total-label font-medium text-xs text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 w-28 transition-colors" data-elem-id="label_subtotal" data-elem-name="Subtotal Label" data-elem-type="text" value="${escapeHtml(labels.subtotal || 'Subtotal')}" placeholder="Subtotal...">
               <span id="poSubtotalDisplay" class="po-selectable font-mono font-semibold text-slate-900 rounded px-0.5 cursor-pointer" data-elem-id="subtotal_val" data-elem-name="Subtotal Amount" data-elem-type="text">${formatMoney(0, cur)}</span>
             </div>
 
             <!-- Discount Row -->
             <div id="poDiscountRow" class="po-total-row hidden items-center justify-between py-1 text-emerald-700" data-po-unit-id="row_discount">
               <div class="flex items-center gap-1.5">
-                <input type="text" class="po-selectable po-total-label po-field-inline font-medium text-xs text-emerald-700 bg-transparent border-none outline-none rounded px-0 py-0.5 w-auto transition-colors" data-elem-id="label_discount" data-elem-name="Discount Label" data-elem-type="text" value="${escapeHtml(labels.discount || 'Discount')}" placeholder="Discount">
+                <input type="text" class="po-selectable po-total-label po-field-inline font-medium text-xs text-emerald-700 bg-transparent border-none outline-none rounded px-0 py-0.5 w-auto transition-colors" data-elem-id="label_discount" data-elem-name="Discount Label" data-elem-type="text" value="${escapeHtml(labels.discount || 'Bundle Discount')}" placeholder="Discount...">
                 <div class="inline-flex items-baseline gap-0">
                   <input type="number" id="poDiscountPercentInput" step="1" min="0" max="100" class="po-percent-input text-right text-xs font-mono font-bold bg-white border border-emerald-300 rounded px-0 py-0.5" style="width: 2ch;" value="0">
                   <span class="text-xs font-mono font-bold leading-none">%</span>
@@ -30054,7 +30100,7 @@ function initSortableWidgets() {
             <!-- Tax Row -->
             <div id="poTaxRow" class="po-total-row hidden items-center justify-between py-1 text-slate-600" data-po-unit-id="row_tax">
               <div class="flex items-center gap-1.5">
-                <input type="text" class="po-selectable po-total-label po-field-inline font-medium text-xs text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 w-auto transition-colors" data-elem-id="label_tax" data-elem-name="Tax Label" data-elem-type="text" value="${escapeHtml(labels.tax || 'VAT / Tax')}" placeholder="VAT / Tax">
+                <input type="text" class="po-selectable po-total-label po-field-inline font-medium text-xs text-slate-600 bg-transparent border-none outline-none rounded px-0 py-0.5 w-auto transition-colors" data-elem-id="label_tax" data-elem-name="Tax Label" data-elem-type="text" value="${escapeHtml(labels.tax || 'VAT / Tax')}" placeholder="VAT / Tax...">
                 <div class="inline-flex items-baseline gap-0">
                   <input type="number" id="poTaxPercentInput" step="1" min="0" max="100" class="po-percent-input text-right text-xs font-mono font-bold bg-white border border-slate-300 rounded px-0 py-0.5" style="width: 2ch;" value="0">
                   <span class="text-xs font-mono font-bold leading-none">%</span>
@@ -30068,7 +30114,7 @@ function initSortableWidgets() {
 
             <!-- Grand Total Bar -->
             <div class="po-total-row flex items-center justify-between py-2 border-t-2 border-slate-900 text-sm font-bold text-slate-900 mt-2" data-po-unit-id="row_grand_total">
-              <input type="text" class="po-selectable po-total-label uppercase tracking-wider font-bold text-xs text-slate-900 bg-transparent border-none outline-none rounded px-0 py-0.5 w-36 transition-colors" data-elem-id="label_total_investment" data-elem-name="Total Investment Label" data-elem-type="text" value="${escapeHtml(labels.totalInvestment || 'Total Investment')}" placeholder="TOTAL INVESTMENT">
+              <input type="text" class="po-selectable po-total-label uppercase tracking-wider font-bold text-xs text-slate-900 bg-transparent border-none outline-none rounded px-0 py-0.5 w-36 transition-colors" data-elem-id="label_total_investment" data-elem-name="Total Investment Label" data-elem-type="text" value="${escapeHtml(labels.totalInvestment || 'TOTAL')}" placeholder="TOTAL...">
               <span id="poTotalAmountDisplay" class="po-selectable text-base font-black font-mono text-slate-900 rounded px-0.5 cursor-pointer" data-elem-id="total_val" data-elem-name="Grand Total Amount" data-elem-type="text">${formatMoney(0, cur)}</span>
             </div>
           </div>
@@ -30080,37 +30126,37 @@ function initSortableWidgets() {
       bodyHtml = `
         <div class="po-selectable po-signatures-grid grid grid-cols-1 sm:grid-cols-2 gap-8 pt-4" data-elem-id="signatures_${sid}" data-elem-name="Signatures Block" data-elem-type="signatures" data-po-container="signatures_grid">
           <div class="space-y-3" data-po-unit-id="sig_col_client" data-po-container="sig_client">
-            <input type="text" class="po-client-sign-title font-bold text-xs uppercase tracking-wider text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full" data-sec-id="${sid}" value="${escapeHtml(clientTitle)}" placeholder="AUTHORIZED CLIENT SIGNATURE">
+            <input type="text" class="po-client-sign-title font-bold text-xs uppercase tracking-wider text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full" data-sec-id="${sid}" value="${escapeHtml(clientTitle)}" placeholder="AUTHORIZED CLIENT SIGNATURE...">
             <div class="h-16 border-b border-slate-300 flex items-end pb-1">
-              <input type="text" class="po-sign-seal-label text-[11px] text-slate-400 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signSealText || 'Signature & Seal')}" placeholder="Signature & Seal">
+              <input type="text" class="po-sign-seal-label text-[11px] text-slate-400 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signSealText || 'Signature & Seal')}" placeholder="Signature & Seal...">
             </div>
             <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 gap-2">
-              <input type="text" class="po-sign-date-label text-[11px] text-slate-500 bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signDateText || 'Date: _________________')}" placeholder="Date: _________">
-              <input type="text" class="po-sign-name-label text-[11px] text-slate-500 text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signNameText || 'Name: _________________')}" placeholder="Name: _________">
+              <input type="text" class="po-sign-date-label text-[11px] text-slate-500 bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signDateText || 'Date: _________________')}" placeholder="Date: _________...">
+              <input type="text" class="po-sign-name-label text-[11px] text-slate-500 text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signNameText || 'Name: _________________')}" placeholder="Name: _________...">
             </div>
           </div>
           <div class="space-y-3" data-po-unit-id="sig_col_provider" data-po-container="sig_provider">
-            <input type="text" class="po-provider-sign-title font-bold text-xs uppercase tracking-wider text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full" data-sec-id="${sid}" value="${escapeHtml(providerTitle)}" placeholder="SERVICE PROVIDER SIGNATURE">
+            <input type="text" class="po-provider-sign-title font-bold text-xs uppercase tracking-wider text-slate-800 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full" data-sec-id="${sid}" value="${escapeHtml(providerTitle)}" placeholder="SERVICE PROVIDER SIGNATURE...">
             <div class="h-16 border-b border-slate-300 flex items-end pb-1">
-              <input type="text" class="po-sign-seal-provider-label text-[11px] text-slate-400 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signSealProviderText || 'Signature & Seal')}" placeholder="Signature & Seal">
+              <input type="text" class="po-sign-seal-provider-label text-[11px] text-slate-400 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signSealProviderText || 'Signature & Seal')}" placeholder="Signature & Seal...">
             </div>
             <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 gap-2">
-              <input type="text" class="po-sign-date-provider-label text-[11px] text-slate-500 bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signDateProviderText || 'Date: _________________')}" placeholder="Date: _________">
-              <input type="text" class="po-sign-name-provider-label text-[11px] text-slate-500 text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signNameProviderText || 'Name: _________________')}" placeholder="Name: _________">
+              <input type="text" class="po-sign-date-provider-label text-[11px] text-slate-500 bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signDateProviderText || 'Date: _________________')}" placeholder="Date: _________...">
+              <input type="text" class="po-sign-name-provider-label text-[11px] text-slate-500 text-right bg-transparent border-none outline-none rounded px-0 py-0.5 w-1/2 print-keep" data-sec-id="${sid}" value="${escapeHtml(sec.signNameProviderText || 'Name: _________________')}" placeholder="Name: _________...">
             </div>
           </div>
         </div>
       `;
     } else {
       const placeholderText = sec.type === 'scope'
-        ? 'Describe project scope, deliverables, and goals...'
+        ? 'Project scope...'
         : sec.type === 'timeline'
         ? 'Estimated duration, delivery phases, and milestone schedules...'
         : sec.type === 'terms'
         ? 'Payment schedules, deposits, milestone releases, invoice terms...'
         : sec.type === 'conditions'
         ? 'Terms, validity, revision rounds, out-of-scope policies...'
-        : 'Type here…';
+        : 'Type here...';
 
       bodyHtml = `
         <div contenteditable="true" class="po-selectable po-section-content po-doc-text w-full text-xs text-slate-700 leading-relaxed bg-transparent border-none outline-none rounded px-0 py-0.5 min-h-[24px] mt-1 transition-colors" data-sec-id="${sid}" data-elem-id="content_${sid}" data-elem-name="Text: ${escapeHtml(sec.title || 'Section')}" data-elem-type="text" data-placeholder="${placeholderText}">${formatInitialContent(sec.content)}</div>
@@ -30122,7 +30168,7 @@ function initSortableWidgets() {
       <div class="po-section po-selectable ${selCls}" data-sec-id="${sid}" data-sec-index="${idx}" data-elem-id="sec_${sid}" data-elem-name="${escapeHtml(sec.title || 'Section')}" data-elem-type="section">
         ${poBlockChromeHtml(idx, true, sec.title || 'Section')}
         <div class="po-title-wrap mb-1">
-          <input type="text" class="po-selectable po-section-title-input text-xs font-bold uppercase tracking-wider text-slate-900 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-sec-id="${sid}" data-elem-id="title_${sid}" data-elem-name="Title: ${escapeHtml(sec.title || 'Untitled')}" data-elem-type="text" value="${escapeHtml(sec.title || '')}" placeholder="SECTION TITLE">
+          <input type="text" class="po-selectable po-section-title-input text-xs font-bold uppercase tracking-wider text-slate-900 bg-transparent border-none outline-none rounded px-0 py-0.5 w-full transition-colors" data-sec-id="${sid}" data-elem-id="title_${sid}" data-elem-name="Title: ${escapeHtml(sec.title || 'Untitled')}" data-elem-type="text" value="${escapeHtml(sec.title || '')}" placeholder="SECTION TITLE...">
         </div>
         ${bodyHtml}
       </div>
@@ -31234,10 +31280,10 @@ function initSortableWidgets() {
             <textarea rows="1" class="po-selectable po-item-desc po-doc-text text-xs font-medium text-slate-800 placeholder-slate-400" data-elem-id="item_desc_${idx}" data-elem-name="Item ${idx + 1} Description" data-elem-type="text" placeholder="Deliverable / Milestone description..." data-index="${idx}">${escapeHtml(item.description || '')}</textarea>
           </td>
           <td class="po-col-qty py-2 px-3 text-center">
-            <input type="number" step="any" min="0" class="po-item-qty w-16 text-center font-mono text-xs text-slate-700 bg-transparent border-none outline-none focus:outline-none" value="${q}" data-index="${idx}">
+            <input type="number" step="any" min="0" class="po-item-qty w-16 text-center font-mono text-xs text-slate-700 bg-transparent border-none outline-none focus:outline-none" placeholder="1..." value="${q}" data-index="${idx}">
           </td>
           <td class="po-col-rate py-2 px-3 text-right">
-            <input type="number" step="any" min="0" class="po-item-rate w-24 text-right font-mono text-xs text-slate-700 bg-transparent border-none outline-none focus:outline-none" placeholder="0" value="${r > 0 ? r : ''}" data-index="${idx}">
+            <input type="number" step="any" min="0" class="po-item-rate w-24 text-right font-mono text-xs text-slate-700 bg-transparent border-none outline-none focus:outline-none" placeholder="0..." value="${r > 0 ? r : ''}" data-index="${idx}">
           </td>
           <td class="po-col-amount py-2 px-3 text-right font-mono font-semibold text-slate-900 po-item-amount-display po-selectable cursor-pointer" data-elem-id="item_amount_${idx}" data-elem-name="Item ${idx + 1} Amount" data-elem-type="text">
             ${formatMoney(amt, cur)}
@@ -31266,7 +31312,6 @@ function initSortableWidgets() {
   }
 
   function addPriceOfferingItem() {
-    pushPoUndoSnapshot();
     flushLivePoDomToState();
     const newIdx = currentPoItems.length;
     currentPoItems.push({
@@ -31286,6 +31331,7 @@ function initSortableWidgets() {
     renderPriceOfferingItemsTable();
     recalculatePriceOfferingTotals();
     triggerPriceOfferingAutoSave(true);
+    pushPoUndoSnapshot();
     const rows = document.querySelectorAll('#poItemsTableBody .po-item-desc');
     if (rows.length > 0) {
       const last = rows[rows.length - 1];
@@ -38356,6 +38402,7 @@ ${sectionsText}
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onUp);
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
       };
 
       window.addEventListener('pointermove', onMove);
@@ -38703,7 +38750,55 @@ ${sectionsText}
           }, 0);
         }
       }
+      const fieldOrSec = t && t.closest && t.closest('.po-section-content, .po-field');
+      if (fieldOrSec) {
+        const raw = (fieldOrSec.innerText || fieldOrSec.textContent || '').trim();
+        if (raw === 'Project scope...' || raw === 'Project scope…' || raw === 'Project scope' || raw === '[PROJECT SCOPE & OBJECTIVE]') {
+          fieldOrSec.innerHTML = '';
+          const secId = fieldOrSec.getAttribute('data-sec-id');
+          if (secId) {
+            const sec = (currentPoSections || []).find(s => s && s.id === secId);
+            if (sec) sec.content = '';
+          }
+          triggerPriceOfferingAutoSave(false);
+          schedulePoInputSnapshot();
+        }
+      }
     });
+
+    poDocPage.addEventListener('pointerdown', (e) => {
+      const fieldOrSec = e.target && e.target.closest && e.target.closest('.po-section-content, .po-field');
+      if (fieldOrSec) {
+        const raw = (fieldOrSec.innerText || fieldOrSec.textContent || '').trim();
+        if (raw === 'Project scope...' || raw === 'Project scope…' || raw === 'Project scope' || raw === '[PROJECT SCOPE & OBJECTIVE]') {
+          fieldOrSec.innerHTML = '';
+          const secId = fieldOrSec.getAttribute('data-sec-id');
+          if (secId) {
+            const sec = (currentPoSections || []).find(s => s && s.id === secId);
+            if (sec) sec.content = '';
+          }
+          triggerPriceOfferingAutoSave(false);
+          schedulePoInputSnapshot();
+        }
+      }
+    });
+
+    const topUndoBtn = document.getElementById('poUndoBtn');
+    if (topUndoBtn) {
+      topUndoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerPoUndo();
+      });
+    }
+    const topRedoBtn = document.getElementById('poRedoBtn');
+    if (topRedoBtn) {
+      topRedoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerPoRedo();
+      });
+    }
 
     // Keyboard shortcuts inside A4 Quote / Proforma / Studio Editor (Undo, Redo, Delete, Arrow Nudge & Numeric Guards)
     document.addEventListener('keydown', (e) => {
@@ -39408,13 +39503,13 @@ ${sectionsText}
       if (deleteItemBtn) {
         const idx = parseInt(deleteItemBtn.getAttribute('data-index'), 10);
         if (!isNaN(idx)) {
-          pushPoUndoSnapshot();
           flushLivePoDomToState();
           currentPoItems.splice(idx, 1);
           poShiftItemStyleKeysOnDelete(idx, currentPoItems.length);
           renderPriceOfferingItemsTable();
           recalculatePriceOfferingTotals();
           triggerPriceOfferingAutoSave(true);
+          pushPoUndoSnapshot();
         }
         return;
       }
@@ -39434,6 +39529,7 @@ ${sectionsText}
         }
         recalculatePriceOfferingTotals();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
 
@@ -39442,6 +39538,7 @@ ${sectionsText}
         if (discInput) discInput.value = 0;
         recalculatePriceOfferingTotals();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
 
@@ -39459,6 +39556,7 @@ ${sectionsText}
         }
         recalculatePriceOfferingTotals();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
 
@@ -39467,6 +39565,7 @@ ${sectionsText}
         if (taxInput) taxInput.value = 0;
         recalculatePriceOfferingTotals();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
     });
@@ -39761,17 +39860,20 @@ ${sectionsText}
         e.target.id === 'poElemOffsetYMmInput'
       ) {
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
       if (e.target.id === 'poCurrencyInput' || e.target.id === 'poCurrencySelect') {
         recalculatePriceOfferingTotals();
         syncPriceOfferingTableMirrors();
         triggerPriceOfferingAutoSave(true);
+        pushPoUndoSnapshot();
         return;
       }
       autoResizePoTextareas();
       syncPriceOfferingTableMirrors();
       triggerPriceOfferingAutoSave(true);
+      pushPoUndoSnapshot();
     });
 
     // Pasting into a rich field or section content brings plain text only (formatting is applied with the Design tools)
