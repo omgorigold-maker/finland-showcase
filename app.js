@@ -26519,7 +26519,7 @@ function initSortableWidgets() {
           amount: (parseFloat(proj.amount !== undefined ? proj.amount : proj.fee) || 0) * 0.5,
           currency: proj.currency || state.displayCurrency || 'EUR',
           dueDate: proj.dueDate || '',
-          notes: proj.notes || '',
+          notes: '',
           get priceOffering() {
             return proj.depositProforma;
           },
@@ -26549,7 +26549,7 @@ function initSortableWidgets() {
           amount: parseFloat(proj.amount !== undefined ? proj.amount : proj.fee) || 0,
           currency: proj.currency || state.displayCurrency || 'EUR',
           dueDate: proj.dueDate || '',
-          notes: proj.notes || '',
+          notes: '',
           get priceOffering() {
             return proj.proformaInvoice;
           },
@@ -26580,7 +26580,7 @@ function initSortableWidgets() {
           amount: parseFloat(proj.amount !== undefined ? proj.amount : proj.fee) || 0,
           currency: proj.currency || state.displayCurrency || 'EUR',
           dueDate: proj.dueDate || '',
-          notes: proj.notes || '',
+          notes: '',
           get priceOffering() {
             return proj.priceOffering;
           },
@@ -33108,7 +33108,7 @@ function initSortableWidgets() {
       const srcScopeSec = srcQuote && Array.isArray(srcQuote.sections) ? srcQuote.sections.find(s => s && s.type === 'scope') : null;
       const initScopeContent = (srcScopeSec && srcScopeSec.content)
         ? srcScopeSec.content
-        : (srcQuote && srcQuote.scope ? srcQuote.scope : (proj.notes ? proj.notes.split('\n\n---\n\n')[0] : 'As agreed upon signing quote / proposal'));
+        : (srcQuote && srcQuote.scope ? srcQuote.scope : 'As agreed upon signing quote / proposal');
 
       const baseSender = (srcQuote && srcQuote.sender && srcQuote.sender.name && srcQuote.sender.name !== 'Your Name / Studio')
         ? Object.assign({}, srcQuote.sender)
