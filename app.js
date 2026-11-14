@@ -28453,7 +28453,7 @@ function initSortableWidgets() {
       if (topDeselect) topDeselect.classList.add('hidden');
       if (clearStyleBtn) clearStyleBtn.classList.add('hidden');
       if (sigControls) sigControls.classList.add('hidden');
-      if (sidebarHeaderTitle) sidebarHeaderTitle.textContent = state.activeStudioDocId ? 'Page & Layout' : 'Page & Template';
+      if (sidebarHeaderTitle) sidebarHeaderTitle.textContent = 'Page & Layout';
       if (sidebarHeaderSubtitle) sidebarHeaderSubtitle.textContent = 'Global document rhythm, margins & sections';
 
       // Sync top control bar to Document Defaults
@@ -31402,17 +31402,19 @@ function initSortableWidgets() {
     paginatePoDocument();
     container.style.minHeight = '';
     restorePoScrollPositions(savedRenderScroll);
-    setTimeout(() => {
-      const s = capturePoScrollPositions();
-      updatePoVisualPageBreakGuides();
-      restorePoScrollPositions(s);
-    }, 120);
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(() => {
+    if (!poSuppressDelayedPagination) {
+      setTimeout(() => {
         const s = capturePoScrollPositions();
         updatePoVisualPageBreakGuides();
         restorePoScrollPositions(s);
-      });
+      }, 120);
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => {
+          const s = capturePoScrollPositions();
+          updatePoVisualPageBreakGuides();
+          restorePoScrollPositions(s);
+        });
+      }
     }
   }
 
@@ -32350,7 +32352,7 @@ function initSortableWidgets() {
     }
     const sidebarHeaderTitle = document.getElementById('poSidebarHeaderTitle');
     if (sidebarHeaderTitle && !poSelectedElementId) {
-      sidebarHeaderTitle.textContent = (isStudioDoc || hideTemplates) ? 'Page & Layout' : 'Page & Template';
+      sidebarHeaderTitle.textContent = 'Page & Layout';
     }
     const copyBtn = document.getElementById('copyPriceOfferingSummaryBtn');
     if (copyBtn) {
@@ -33327,6 +33329,8 @@ function initSortableWidgets() {
     return clone.outerHTML;
   }
 
+  let poSuppressDelayedPagination = false;
+
   function renderExactPoSheetHtml(snap, entity = null, isProforma = false, isDeposit = false) {
     const printAreaEl = document.getElementById('priceOfferingPrintArea');
     if (!printAreaEl || typeof renderPriceOfferingDocument !== 'function') return '';
@@ -33391,6 +33395,7 @@ function initSortableWidgets() {
         _isDepositProforma: resolvedDeposit,
         _isProforma: resolvedProforma
       });
+      poSuppressDelayedPagination = true;
       printAreaEl.innerHTML = '';
       renderPriceOfferingDocument(targetProxy, docData);
       return captureCleanPoSheetHtml();
@@ -33398,6 +33403,7 @@ function initSortableWidgets() {
       console.warn('Exact sheet render fallback:', err);
       return '';
     } finally {
+      poSuppressDelayedPagination = false;
       state.activePriceOfferingLeadId = prevActiveLeadId;
       state.activeProformaProjectId = prevActiveProfId;
       state.activeDepositProformaProjectId = prevActiveDepId;
@@ -33414,6 +33420,9 @@ function initSortableWidgets() {
       applyPriceOfferingTypography(prevTypography, false);
       printAreaEl.innerHTML = prevPrintAreaHtml;
       printAreaEl.style.minHeight = prevPrintAreaMinH;
+      if (prevPrintAreaHtml) {
+        poConvertInputsToFields(printAreaEl);
+      }
     }
   }
 
