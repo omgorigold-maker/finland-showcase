@@ -32601,7 +32601,7 @@ function initSortableWidgets() {
           {
             id: 'sec_scope_' + Date.now(),
             type: 'scope',
-            title: (srcScopeSec && srcScopeSec.title) || 'Project Scope & Objective',
+            title: (srcScopeSec && srcScopeSec.title) || 'Project Scope & Objectives',
             pageBreakBefore: false,
             content: initScopeContent
           },
