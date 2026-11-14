@@ -21880,7 +21880,7 @@ function initSortableWidgets() {
 
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     showToast('Total Fee Updated', `Fee set to ${formatMoney(newFee, p.currency)}.`, 'success');
   }
 
@@ -22009,7 +22009,7 @@ function initSortableWidgets() {
     const remAfter = Math.max(0, Math.round((totalFee - nextPaid) * 100) / 100);
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     if (typeof renderSidebarSubscriptionCalendar === 'function') renderSidebarSubscriptionCalendar();
     showToast(
       'Payment Logged! 💰',
@@ -22052,7 +22052,7 @@ function initSortableWidgets() {
     }
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     if (typeof renderSidebarSubscriptionCalendar === 'function') renderSidebarSubscriptionCalendar();
     showToast('Work Deadline Updated', newDate ? `Work deadline set to ${newDate}.` : 'Work deadline cleared.', 'success');
   }
@@ -22107,7 +22107,7 @@ function initSortableWidgets() {
     }
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     if (typeof renderSidebarSubscriptionCalendar === 'function') renderSidebarSubscriptionCalendar();
     showToast('Payment Due Updated', newDate ? `Payment due date set to ${newDate}.` : 'Payment due date cleared.', 'success');
   }
@@ -22131,7 +22131,7 @@ function initSortableWidgets() {
     p.isWorkDone = !isProjectWorkDone(p);
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     if (typeof renderSidebarSubscriptionCalendar === 'function') renderSidebarSubscriptionCalendar();
     showToast(
       p.isWorkDone ? 'Work Marked Done ✓' : 'Work Reopened',
@@ -22178,7 +22178,7 @@ function initSortableWidgets() {
     }
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     showToast('Client Updated', `Client name set to "${newName}".`, 'success');
   }
 
@@ -22231,7 +22231,7 @@ function initSortableWidgets() {
     }
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
     showToast('Project Updated', `Project title set to "${newTitle}".`, 'success');
   }
 
@@ -22544,7 +22544,7 @@ function initSortableWidgets() {
 
       saveBudget();
       renderProjectDetailPage(p, state.displayCurrency);
-      renderBudgetView();
+      if (state.currentTab === 'budget') renderBudgetView();
     };
     reader.readAsDataURL(file);
   }
@@ -22671,7 +22671,7 @@ function initSortableWidgets() {
 
     saveBudget();
     renderProjectDetailPage(p, state.displayCurrency);
-    renderBudgetView();
+    if (state.currentTab === 'budget') renderBudgetView();
   }
 
   function isProjectDone(p) {
@@ -25316,7 +25316,7 @@ function initSortableWidgets() {
       saveBudget();
       if (isProj) {
         renderProjectDetailPage(lead, state.displayCurrency);
-        renderBudgetView();
+        if (state.currentTab === 'budget') renderBudgetView();
       } else {
         renderLeadDetailPage(lead, state.displayCurrency);
       }
@@ -25403,7 +25403,7 @@ function initSortableWidgets() {
     saveBudget();
     if (isProj) {
       renderProjectDetailPage(lead, state.displayCurrency);
-      renderBudgetView();
+      if (state.currentTab === 'budget') renderBudgetView();
     } else {
       renderLeadDetailPage(lead, state.displayCurrency);
     }
@@ -32271,6 +32271,30 @@ function initSortableWidgets() {
     pills.classList.remove('inline-flex');
   }
 
+  function refreshLucideIcons(rootEl) {
+    if (typeof window === 'undefined' || !window.lucide || typeof window.lucide.createIcons !== 'function') return;
+    try {
+      if (rootEl && typeof rootEl.querySelectorAll === 'function') {
+        window.lucide.createIcons({ root: rootEl });
+      } else {
+        window.lucide.createIcons();
+      }
+    } catch (e) {
+      try { window.lucide.createIcons(); } catch (e2) {}
+    }
+  }
+
+  function resetStuckPoPrintState() {
+    if (poPrintLayoutActive) {
+      try { restorePoScreenLayout(); } catch (e) { poPrintLayoutActive = false; }
+    }
+    document.body.classList.remove('printing-po-doc', 'po-print-layout');
+    const topBar = document.getElementById('priceOfferingTopBar');
+    const sidebar = document.getElementById('poRightSidebar');
+    if (topBar) topBar.style.removeProperty('display');
+    if (sidebar) sidebar.style.removeProperty('display');
+  }
+
   function openPriceOfferingDocPage(leadId) {
     if (!leadId) leadId = state.activeFollowupLeadId || state.activeFollowupProjectId;
     if (!leadId) return;
@@ -32280,10 +32304,13 @@ function initSortableWidgets() {
       || (state.budget?.projects || []).find(p => p.id === leadId);
     if (!lead) return;
 
+    resetStuckPoPrintState();
     clearTimeout(poAutoSaveTimeout);
     poAutoSaveTimeout = null;
+    poEditingMasterTemplateType = null;
     state.activeStudioDocId = null;
     state.activeProformaProjectId = null;
+    state.activeDepositProformaProjectId = null;
     state.activePriceOfferingLeadId = leadId;
     if (isProj) {
       state.activeFollowupProjectId = leadId;
@@ -32326,6 +32353,8 @@ function initSortableWidgets() {
     }
 
     const po = lead.priceOffering || {};
+    po._isProforma = false;
+    po._isDepositProforma = false;
     const masterTpl = getMasterPoTemplate();
 
     // Restore per-element InDesign-style styles (deep-merging master template with lead overrides so all leads match)
@@ -32433,11 +32462,14 @@ function initSortableWidgets() {
     const proj = (state.budget?.projects || []).find(p => p.id === projectId);
     if (!proj) return;
 
+    resetStuckPoPrintState();
     clearTimeout(poAutoSaveTimeout);
     poAutoSaveTimeout = null;
+    poEditingMasterTemplateType = null;
     state.activeStudioDocId = null;
     state.activePriceOfferingLeadId = null;
     state.activeFollowupLeadId = null;
+    state.activeDepositProformaProjectId = null;
     state.activeProformaProjectId = projectId;
     state.activeFollowupProjectId = projectId;
     poEditingTemplateDesignId = null;
@@ -32725,8 +32757,10 @@ function initSortableWidgets() {
     const proj = (state.budget?.projects || []).find(p => p.id === projectId);
     if (!proj) return;
 
+    resetStuckPoPrintState();
     clearTimeout(poAutoSaveTimeout);
     poAutoSaveTimeout = null;
+    poEditingMasterTemplateType = null;
     state.activeStudioDocId = null;
     state.activePriceOfferingLeadId = null;
     state.activeFollowupLeadId = null;
@@ -33741,9 +33775,7 @@ function initSortableWidgets() {
         `;
       }).join('');
     }
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
+    refreshLucideIcons(document.getElementById('poVersionsDropdownMenu'));
   }
 
   function openFollowupExportSnapshotModal(targetType, targetId, snapshotId) {
@@ -34033,6 +34065,8 @@ function initSortableWidgets() {
       renderPoVersionsDropdown();
       window.removeEventListener('afterprint', cleanupPrint);
       window.removeEventListener('focus', onFocusAfterPrint);
+      window.removeEventListener('pointerdown', onFallbackInteract, true);
+      window.removeEventListener('keydown', onFallbackInteract, true);
       if (typeof poAfterPrintRestoreFn === 'function') {
         const fn = poAfterPrintRestoreFn;
         poAfterPrintRestoreFn = null;
@@ -34048,12 +34082,27 @@ function initSortableWidgets() {
     const onFocusAfterPrint = () => {
       setTimeout(() => {
         if (poPrintLayoutActive) cleanupPrint();
-      }, 400);
+      }, 250);
+    };
+    const onFallbackInteract = () => {
+      if (poPrintLayoutActive) cleanupPrint();
     };
     window.addEventListener('afterprint', cleanupPrint);
     window.addEventListener('focus', onFocusAfterPrint);
+    window.addEventListener('pointerdown', onFallbackInteract, true);
+    window.addEventListener('keydown', onFallbackInteract, true);
 
-    window.print();
+    requestAnimationFrame(() => {
+      try {
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (poPrintLayoutActive && document.hasFocus && document.hasFocus()) {
+            cleanupPrint();
+          }
+        }, 600);
+      }
+    });
   }
 
   function copyPriceOfferingSummary() {
@@ -35197,9 +35246,7 @@ ${sectionsText}
     // Project Images
     renderProjectImages(proj);
 
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
+    refreshLucideIcons(document.getElementById('projectDetailPage'));
   }
 
   // Project Links Helper & Renderer
@@ -36442,7 +36489,7 @@ ${sectionsText}
       }
       saveBudget();
       renderProjectDetailPage(p, state.displayCurrency);
-      renderBudgetView();
+      if (state.currentTab === 'budget') renderBudgetView();
       if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
       }
