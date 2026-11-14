@@ -32307,7 +32307,6 @@ function initSortableWidgets() {
     resetStuckPoPrintState();
     clearTimeout(poAutoSaveTimeout);
     poAutoSaveTimeout = null;
-    poEditingMasterTemplateType = null;
     state.activeStudioDocId = null;
     state.activeProformaProjectId = null;
     state.activeDepositProformaProjectId = null;
@@ -32465,7 +32464,6 @@ function initSortableWidgets() {
     resetStuckPoPrintState();
     clearTimeout(poAutoSaveTimeout);
     poAutoSaveTimeout = null;
-    poEditingMasterTemplateType = null;
     state.activeStudioDocId = null;
     state.activePriceOfferingLeadId = null;
     state.activeFollowupLeadId = null;
@@ -32760,7 +32758,6 @@ function initSortableWidgets() {
     resetStuckPoPrintState();
     clearTimeout(poAutoSaveTimeout);
     poAutoSaveTimeout = null;
-    poEditingMasterTemplateType = null;
     state.activeStudioDocId = null;
     state.activePriceOfferingLeadId = null;
     state.activeFollowupLeadId = null;
@@ -33223,8 +33220,12 @@ function initSortableWidgets() {
         entity = (state.budget?.projects || []).find(p => p.id === targetId) || (state.budget?.leads || []).find(l => l.id === targetId);
       }
     }
-    if (entity && !isProforma) {
-      isProforma = (state.budget?.projects || []).some(p => p.id === entity.id) && !!entity.proformaInvoice;
+    if (d && d._isProforma === true) {
+      isProforma = true;
+    } else if (d && (d._isProforma === false || d._isDepositProforma === true)) {
+      isProforma = false;
+    } else if (entity && !isProforma && !d.refNo?.startsWith('PO-') && !d.refNo?.startsWith('DPI-')) {
+      isProforma = (state.budget?.projects || []).some(p => p.id === entity.id) && !!entity.proformaInvoice && !entity.priceOffering;
     }
     const cur = d.currency || (entity && entity.currency) || state.displayCurrency || 'EUR';
 
@@ -33864,9 +33865,9 @@ function initSortableWidgets() {
     document.getElementById('poVersionsDropdownMenu')?.classList.add('hidden');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
+    if (containerEl.parentElement) containerEl.parentElement.scrollTop = 0;
+    containerEl.scrollTop = 0;
+    refreshLucideIcons(modal);
   }
 
   function closeFollowupExportSnapshotModal() {
